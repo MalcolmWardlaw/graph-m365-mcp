@@ -1,0 +1,9 @@
+token_cache.json
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+
+# Claude Code local settings (personal, not shared)
+.claude/
+
