@@ -63,8 +63,11 @@ Re-seed (must run in a terminal, not via the MCP host):
 
 ```fish
 cd ~/Documents/projects/graph-m365-mcp
-env CAL_READ=1 CAL_WRITE=1 uv run server.py --auth
+env GRAPH_CLIENT_ID=<your-app-id> GRAPH_TENANT_ID=<your-tenant-id> \
+    CAL_READ=1 CAL_WRITE=1 uv run server.py --auth
 ```
+
+(`GRAPH_CLIENT_ID`/`GRAPH_TENANT_ID` are required here too — they live in the host `env` block, not the shell, so `--auth` from a terminal won't inherit them.)
 
 `--auth` requests exactly the scopes its `CAPS` env resolves to (`required_scopes()`), so the interactive consent round must cover the scopes the *host* will actually use — otherwise a cap that's on in the host but off at auth time only works if its scope happens to be AAD-consented already; if it isn't, silent acquisition fails later inside the host, where no interactive consent is possible. The default re-seed above mirrors the shipped Desktop config (mail on, both calendar caps on) so one consent round covers everything that ships. `MAIL_SEND` is deliberately left off: requesting `Mail.Send` may trigger a *second* admin-consent request, so it stays out of the default seed. If you want send capability now or in the future, decide that up front and add `MAIL_SEND=1` to the seed env (and the host `env` block) so it's consented in the same round; likewise drop the `CAL_*` vars here if you decide to set the flags off in the calendar tools but want them later. The point is to consent, in one interactive pass, the exact union the host will request — no more, no less.
 
