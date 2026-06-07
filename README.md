@@ -1,5 +1,9 @@
 # graph-m365-mcp
 
+> **Part of [email-cleaner-for-llms](https://github.com/MalcolmWardlaw/email-cleaner-for-llms)** — a small family of sanitizing MCP proxies that sit between a mail API and the LLM, flattening HTML and stripping cruft so a model can batch-classify and act on hundreds of messages without blowing its context window.
+>
+> **Backends:** **graph-m365-mcp** (Microsoft 365 / Graph) · [fastmail-clean-mcp](https://github.com/MalcolmWardlaw/fastmail-clean-mcp) (Fastmail / JMAP) · IMAP (planned)
+
 Local stdio MCP server exposing Microsoft 365 mail and personal-calendar tools to a Claude Desktop or Claude Code host, via the Microsoft Graph v1.0 API. Read-and-stage by design (drafts, not send; soft-delete, not hard-delete) with a configurable folder-exclusion gate on the read paths.
 
 > Unofficial and independent. Not affiliated with, endorsed by, or sponsored by Microsoft. "Microsoft 365", "Microsoft Graph", and "Outlook" are trademarks of Microsoft Corporation, used here only to describe what the server talks to.
