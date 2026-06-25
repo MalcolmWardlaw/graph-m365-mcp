@@ -743,8 +743,108 @@ def _auth() -> None:
         print(f"FAILED: {err}", file=sys.stderr)
 
 
+def _auth_device() -> None:
+    """Headless sign-in via the OAuth device-code flow.
+
+    No browser or loopback redirect on this host: MSAL prints a short code and a
+    URL (https://microsoft.com/devicelogin); complete it on any device, and the
+    refresh token lands in the same persisted cache _auth() uses. Requires the AAD
+    app to have "Allow public client flows" enabled.
+    """
+    app = _app()
+    flow = app.initiate_device_flow(scopes=SCOPES)
+    if "user_code" not in flow:
+        err = flow.get("error_description") or flow.get("error") or str(flow)
+        print(f"FAILED: device flow init: {err}", file=sys.stderr)
+        return
+    # flow["message"] is human-readable: "go to <url> and enter <code>".
+    print(flow["message"], file=sys.stderr, flush=True)
+    res = app.acquire_token_by_device_flow(flow)  # blocks until completed/expired
+    if res and "access_token" in res:
+        print("OK", file=sys.stderr)
+    else:
+        err = (res or {}).get("error_description") or (res or {}).get("error") or "unknown"
+        print(f"FAILED: {err}", file=sys.stderr)
+
+
+def _auth_tunnel() -> None:
+    """Interactive sign-in for a headless box reached over SSH (tunneled loopback).
+
+    Runs the standard authorization-code flow but, instead of opening a browser on
+    this host, prints the auth URL and catches the loopback redirect on a fixed
+    local port (GRAPH_AUTH_PORT, default 8400). From your workstation:
+        ssh -L 8400:localhost:8400 <user>@<box>
+    then open the printed URL in your workstation browser and sign in. The redirect
+    lands on your workstation's localhost:8400, tunnels to this box, and the token
+    is written to the same persisted cache the server reads. Conditional Access
+    sees a normal interactive browser sign-in on your own device — unlike the
+    device-code flow, which many tenants block.
+    """
+    import urllib.parse
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    port = int(os.environ.get("GRAPH_AUTH_PORT", "8400"))
+    app = _app()
+    redirect_uri = f"http://localhost:{port}"
+    flow = app.initiate_auth_code_flow(scopes=SCOPES, redirect_uri=redirect_uri)
+    if "auth_uri" not in flow:
+        err = flow.get("error_description") or flow.get("error") or str(flow)
+        print(f"FAILED: auth-code init: {err}", file=sys.stderr)
+        return
+
+    print(
+        "\n--- Microsoft 365 sign-in ---\n"
+        f"1) On your workstation, open an SSH tunnel (if not already):\n"
+        f"     ssh -L {port}:localhost:{port} <user>@<this-box>\n"
+        "2) Then open this URL in your workstation browser and sign in:\n\n"
+        f"{flow['auth_uri']}\n",
+        file=sys.stderr, flush=True,
+    )
+
+    captured: dict = {}
+
+    class _Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            params = {k: v[0] for k, v in
+                      urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).items()}
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            if "code" in params or "error" in params:
+                captured.update(params)
+                self.wfile.write(b"<html><body><h3>Sign-in received. You can close this tab.</h3></body></html>")
+            else:
+                self.wfile.write(b"<html><body>Waiting for the sign-in redirect...</body></html>")
+
+        def log_message(self, *_a):
+            pass  # keep stderr clean for the auth UX
+
+    httpd = HTTPServer(("127.0.0.1", port), _Handler)
+    httpd.timeout = 900
+    timed_out = {"v": False}
+    httpd.handle_timeout = lambda: timed_out.__setitem__("v", True)
+    while not captured and not timed_out["v"]:
+        httpd.handle_request()  # ignore stray requests (favicon, etc.) until code/error
+    httpd.server_close()
+
+    if not captured:
+        print("FAILED: no redirect received within 15 min (tunnel up? URL opened?)", file=sys.stderr)
+        return
+
+    res = app.acquire_token_by_auth_code_flow(flow, captured)
+    if res and "access_token" in res:
+        print("OK", file=sys.stderr)
+    else:
+        err = (res or {}).get("error_description") or (res or {}).get("error") or "unknown"
+        print(f"FAILED: {err}", file=sys.stderr)
+
+
 if __name__ == "__main__":
-    if "--auth" in sys.argv:
+    if "--auth-tunnel" in sys.argv:
+        _auth_tunnel()
+    elif "--auth-device" in sys.argv:
+        _auth_device()
+    elif "--auth" in sys.argv:
         _auth()
     else:
         mcp.run()
