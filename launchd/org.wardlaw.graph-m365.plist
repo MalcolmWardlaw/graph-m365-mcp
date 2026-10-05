@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- graph-m365 daemon: one long-lived instance of server.py in the GUI login
+     session, listening on a 0600 Unix socket in ~/.config/graph-m365/. Both
+     Claude hosts keep invoking `uv run server.py`; with the daemon up that
+     command is a stdio shim that bridges to the socket and needs no DNS,
+     Keychain or Launch Services of its own (ROADMAP.md Phase 3).
+
+     This file is a template. launchd/install.fish fills the __PLACEHOLDERS__
+     from the Claude Desktop config, writes the result to ~/Library/LaunchAgents
+     and bootstraps it. Do not commit a filled-in copy: the tenant and client
+     ids belong in host config, not in the repo.
+
+     Must NOT set KEYCHAIN_BACKEND=cli or msal: the daemon is long-lived, and a
+     long-lived process on a Keychain backend is the failure mode documented
+     under Credentials in CLAUDE.md. server.py refuses to start as a daemon on
+     anything but the file backend. Logs to ~/Library/Logs/graph-m365.log,
+     metadata only. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.wardlaw.graph-m365</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__UV__</string>
+        <string>run</string>
+        <string>__REPO__/server.py</string>
+        <string>--daemon</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>GRAPH_CLIENT_ID</key>
+        <string>__GRAPH_CLIENT_ID__</string>
+        <key>GRAPH_TENANT_ID</key>
+        <string>__GRAPH_TENANT_ID__</string>
+        <key>MAIL_SEND</key>
+        <string>0</string>
+        <key>CAL_READ</key>
+        <string>1</string>
+        <key>CAL_WRITE</key>
+        <string>1</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/graph-m365.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/graph-m365.log</string>
+</dict>
+</plist>
