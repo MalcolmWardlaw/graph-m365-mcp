@@ -86,7 +86,7 @@ All configuration is via environment variables. The server itself ships with no 
 | `MAIL_WRITE`       | `1`         | Register `archive_message`, `move_messages`, `delete_messages`, `mark_messages`; adds `Mail.ReadWrite` |
 | `MAIL_DRAFT`       | `1`         | Register `create_draft` (with local-file `attachments`); adds `Mail.ReadWrite` |
 | `MAIL_SEND`        | `0`         | Register `send_message`; adds `Mail.Send` (off by design)               |
-| `ATTACH_SAVE_DIR`  | (empty)     | When set, register `save_attachment`, which writes file attachments under this directory only; no scope added |
+| `ATTACH_SAVE_DIR`  | `~/Downloads` | Root for `save_attachment`, which writes file attachments under this directory only; no scope added. Unset means `~/Downloads`; empty or `off` leaves the tool unregistered |
 | `CAL_READ`         | `1`         | Register `list_events`, `get_event`; adds `Calendars.Read`              |
 | `CAL_WRITE`        | `1`         | Register `create/update/delete_event`; adds `Calendars.ReadWrite`       |
 | `EXCLUDE_FOLDERS`  | (empty)     | Comma-separated top-level folder display names hard-blocked from list/search/get. When non-empty, registers `excluded_recent_count` for metadata-only counts. |
@@ -201,8 +201,9 @@ deliberately scoped down rather than full-featured:
   neither are access tokens. Attachments follow the same rule: `get_attachment`
   extracts text in memory (PDF, .docx, HTML, plain text) and never returns
   bytes or base64, never writes a file, and refuses binary types outright. The
-  one exception is `save_attachment`, registered only when the host sets
-  `ATTACH_SAVE_DIR`: it writes a file attachment under that root and nowhere
+  one exception is `save_attachment`, registered by default with its root at
+  `~/Downloads` (override with `ATTACH_SAVE_DIR`, or set it to `off` to
+  unregister the tool): it writes a file attachment under that root and nowhere
   else (relative `subdir`, bare basename, no overwrite, 50 MB cap, 0600) and
   returns the path and a sha256, not the bytes. In the other direction,
   `create_draft(attachments=[...])` is the one path that reads a local file and

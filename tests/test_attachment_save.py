@@ -31,6 +31,14 @@ tools = server.mcp._tool_manager._tools
 check("dark when ATTACH_SAVE_DIR is empty", "save_attachment" not in tools)
 check("get_attachment still registered", "get_attachment" in tools)
 
+# Root resolution: unset defaults to ~/Downloads; empty or "off" turns it off.
+asd = server._attach_save_dir
+check("unset defaults to ~/Downloads", asd(None) == os.path.expanduser("~/Downloads"))
+check("empty turns it off", asd("") == "" and asd("   ") == "")
+check("'off' turns it off", asd("off") == "" and asd("OFF") == "")
+check("explicit path used, ~ expanded", asd("~/x/y") == os.path.expanduser("~/x/y"))
+check("explicit absolute path used", asd("/tmp/z") == "/tmp/z")
+
 # Filename sanitizer.
 sf = server._safe_filename
 check("plain name passes", sf("Report.xlsx") == "Report.xlsx")
@@ -68,4 +76,21 @@ with tempfile.TemporaryDirectory() as root:
     check("created leaf dir is 0700", (os.stat(os.path.join(root, "sub", "dir")).st_mode & 0o777) == 0o700)
 
 check("save ceiling is 50 MB", server._ATTACH_SAVE_MAX_BYTES == 50 * 1024 * 1024)
+
+# Registration in a fresh process: on with ATTACH_SAVE_DIR unset (the default),
+# off with "off". This process imported server with "", so it cannot test this.
+import subprocess
+here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+probe = ("import sys; sys.path.insert(0, %r); import server; "
+         "print('save_attachment' in server.mcp._tool_manager._tools, server.ATTACH_SAVE_DIR)") % here
+def registered(value):
+    env = {k: v for k, v in os.environ.items() if k != "ATTACH_SAVE_DIR"}
+    if value is not None:
+        env["ATTACH_SAVE_DIR"] = value
+    out = subprocess.run([sys.executable, "-c", probe], env=env, capture_output=True, text=True)
+    return out.stdout.strip()
+check("registered by default, root is ~/Downloads",
+      registered(None) == f"True {os.path.expanduser('~/Downloads')}")
+check("not registered with ATTACH_SAVE_DIR=off", registered("off") == "False")
+
 print(f"FAILURES: {fails}"); sys.exit(1 if fails else 0)

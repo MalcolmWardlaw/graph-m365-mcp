@@ -1669,12 +1669,31 @@ def get_attachment(message_id: str, attachment_id: str, head_chars: int = 20000)
 
 
 # Saving attachments to disk is the one deliberate exception to the
-# no-persistence rule, and it is dark unless the host sets ATTACH_SAVE_DIR.
-# The exception is narrow: bytes land only under that one root, the file name
-# is sanitized to a bare basename, nothing is ever overwritten, and the tool
-# returns a path and a digest, never the bytes. See CLAUDE.md guardrails.
+# no-persistence rule. It is on by default and writes to ~/Downloads, because
+# that is where a Mac user expects a downloaded file to appear and because the
+# server now runs as a launchd daemon, whose environment can only be changed by
+# editing its plist. ATTACH_SAVE_DIR overrides the root; "off" or an empty
+# value turns the tool off. The exception is narrow: bytes land only under that
+# one root, the file name is sanitized to a bare basename, nothing is ever
+# overwritten, and the tool returns a path and a digest, never the bytes. See
+# CLAUDE.md guardrails.
 
-ATTACH_SAVE_DIR = os.environ.get("ATTACH_SAVE_DIR", "").strip()
+_ATTACH_SAVE_DEFAULT = "~/Downloads"
+
+
+def _attach_save_dir(raw: str | None) -> str:
+    """Save root from the ATTACH_SAVE_DIR value: unset means ~/Downloads;
+    empty or 'off' means the tool is off (returns ''); anything else is used
+    as given, with ~ expanded."""
+    if raw is None:
+        raw = _ATTACH_SAVE_DEFAULT
+    raw = raw.strip()
+    if not raw or raw.lower() == "off":
+        return ""
+    return os.path.expanduser(raw)
+
+
+ATTACH_SAVE_DIR = _attach_save_dir(os.environ.get("ATTACH_SAVE_DIR"))
 _ATTACH_SAVE_MAX_BYTES = 50 * 1024 * 1024  # Graph's own fileAttachment ceiling is ~150 MB
 _FNAME_BAD = re.compile(r'[\x00-\x1f\x7f/\\:*?"<>|]')
 
@@ -1713,8 +1732,9 @@ def _save_target(root: str, subdir: str | None, filename: str) -> str:
 
 def save_attachment(message_id: str, attachment_id: str,
                     subdir: str | None = None, filename: str | None = None) -> dict:
-    """Save one file attachment to disk under the host-configured
-    ATTACH_SAVE_DIR and return its metadata, path, bytes written, and sha256.
+    """Save one file attachment to disk under the save root (~/Downloads by
+    default, or ATTACH_SAVE_DIR when the host sets it) and return its
+    metadata, path, bytes written, and sha256.
     The only tool on this server that writes message content to disk, and it
     writes only there: `subdir` is relative and may not contain '..',
     `filename` is reduced to a bare basename (default: the attachment's own
@@ -1973,7 +1993,7 @@ def _attach_roots() -> list[str]:
     """Directories a draft attachment may come from: $HOME, plus ATTACH_SAVE_DIR
     when set, so a file this server saved can be attached back out."""
     roots = [os.path.realpath(os.path.expanduser("~"))]
-    if ATTACH_SAVE_DIR:
+    if ATTACH_SAVE_DIR and os.path.realpath(ATTACH_SAVE_DIR) not in roots:
         roots.append(os.path.realpath(ATTACH_SAVE_DIR))
     return roots
 
